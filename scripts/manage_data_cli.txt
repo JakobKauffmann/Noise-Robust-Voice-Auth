@@ -1,0 +1,53 @@
+1. Generate train NPY from local raw train wav, store in Drive AND local, generate two CSVs (local and drive pointing):
+(Assumes original raw train wavs were already copied locally by a previous step or script)
+
+!python -m scripts.manage_data \
+  --drive_workspace_dir="/content/drive/Shareddrives/VoiceAuth" \
+  --action preprocess_raw_train gen_csv_local gen_csv_drive \
+  --force_preprocess # Optional: Overwrite existing NPY files
+  # Note: This action implicitly saves NPY to Drive using the default path
+  # Add --drive_npy_base_dir="..." to specify a different Drive location
+
+  (This combines preprocessing and CSV generation. Preprocessing saves locally and to Drive. Then CSVs are generated for both local and Drive NPY locations.)
+
+  =================================================================================
+
+2. Load train NPY from Drive to local (using original WAV CSV to find corresponding NPY):
+(Use this if you previously ran step 1 and saved NPYs to Drive, and now want to load them locally for training)
+
+!python -m scripts.manage_data \
+  --drive_workspace_dir="/content/drive/Shareddrives/VoiceAuth" \
+  --action load_npy_train \
+  --force_copy # Optional: Overwrite existing local NPY files
+  # Add --drive_npy_base_dir="..." if NPYs are not in the default Drive location
+
+=================================================================================
+
+  Load train spec JPG from Drive to local:
+
+  !python -m scripts.manage_data
+  --drive_workspace_dir="/content/drive/Shareddrives/VoiceAuth" \
+  --action copy_spec_train \
+  --force_copy # Optional: Overwrite existing local JPG files
+
+=================================================================================
+
+  Load train NPY AND train spec JPG from Drive to local (for fusion step):
+
+  !python -m scripts.manage_data
+  --drive_workspace_dir="/content/drive/Shareddrives/VoiceAuth" \
+  --action load_npy_train copy_spec_train \
+  --force_copy # Optional: Overwrite existing local files
+  # Add --drive_npy_base_dir="..." if NPYs are not in the default Drive location
+
+=================================================================================
+  Prepare all Test data: Generate test NPYs (from local test WAVs) saving locally AND to Drive, generate all NPY CSVs (local and drive pointing), AND copy test spectrograms locally:
+(Assumes original raw test wavs (clean, noisy, filtered) were already copied locally)
+
+!python -m scripts.manage_data
+  --drive_workspace_dir="/content/drive/Shareddrives/VoiceAuth" \
+  --action preprocess_raw_test copy_spec_test gen_csv_local gen_csv_drive \
+  --force_preprocess # Optional: Overwrite existing NPY files
+  --force_copy # Optional: Overwrite existing spectrogram JPG files
+  # Note: This action implicitly saves NPY to Drive using the default path
+  # Add --drive_npy_base_dir="..." to specify a different Drive location
