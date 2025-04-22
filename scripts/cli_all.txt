@@ -1,0 +1,138 @@
+## Optimized CLI Calls for Training and Evaluation
+
+**Note:** Adjust `--batch_size` based on your Colab GPU memory. `128` is an example; start lower if you encounter memory errors. Adjust `--num_workers` based on your Colab CPU cores (e.g., 2, 4, 8). `--seed 42` is used consistently.
+
+**1. Define Workspace Path (Optional but Recommended)**
+
+It's helpful to define your workspace path as a variable in your terminal session or at the start of your notebook cell containing these commands.
+
+```bash
+# Set this to your actual workspace path on Drive
+WORKSPACE="/content/drive/Shareddrives/VoiceAuth"
+
+
+2. Train SincNet (using preprocessed .npy data)
+Initial Run:
+python scripts/train_sincnet.py \
+  "${WORKSPACE}/data/pairs/pairs_raw_train_preprocessed_local.csv" \
+  --output_dir outputs \
+  --device cuda \
+  --epochs 50 \
+  --batch_size 128 \
+  --num_workers 8 \
+  --lr 1e-4 \
+  --patience 5 \
+  --seed 42 \
+  # --no_compile # Optional: Disable torch.compile if causing issues
+  # --no_amp # Optional: Disable Automatic Mixed Precision
+
+
+Resume Run:
+python scripts/train_sincnet.py \
+  "${WORKSPACE}/data/pairs/pairs_raw_train_preprocessed_local.csv" \
+  --output_dir outputs \
+  --device cuda \
+  --epochs 50 \
+  --batch_size 128 \
+  --num_workers 8 \
+  --lr 1e-4 \
+  --patience 5 \
+  --seed 42 \
+  --resume \
+  # --no_compile
+  # --no_amp
+
+
+3. Train MobileNetV2 (using local spectrogram .jpg data)
+Initial Run:
+python scripts/train_mobilenetv2.py \
+  "${WORKSPACE}/data/pairs/pairs_spec_train_local.csv" \
+  --output_dir outputs \
+  --device cuda \
+  --epochs 50 \
+  --batch_size 128 \
+  --num_workers 8 \
+  --lr 1e-4 \
+  --patience 5 \
+  --seed 42 \
+  --freeze_features # Or --no-freeze_features to fine-tune
+  # --data_root "/content/data/spectrograms/noisy_train/" # Only needed if CSV paths are relative/need remapping
+  # --no_compile
+  # --no_amp
+
+
+Resume Run:
+python scripts/train_mobilenetv2.py \
+  "${WORKSPACE}/data/pairs/pairs_spec_train_local.csv" \
+  --output_dir outputs \
+  --device cuda \
+  --epochs 50 \
+  --batch_size 128 \
+  --num_workers 8 \
+  --lr 1e-4 \
+  --patience 5 \
+  --seed 42 \
+  --freeze_features \
+  --resume \
+  # --data_root "/content/data/spectrograms/noisy_train/"
+  # --no_compile
+  # --no_amp
+
+
+4. Train Fusion Model
+(Assumes sincnet_best.pt and mobilenetv2_best.pt exist in outputs/checkpoints/ from previous steps)
+Initial Run:
+(Note: Fusion might require a smaller batch size due to combined memory usage)
+python scripts/train_fusion.py \
+  "${WORKSPACE}/data/pairs/pairs_raw_train_preprocessed_local.csv" \
+  "${WORKSPACE}/data/pairs/pairs_spec_train_local.csv" \
+  --output_dir outputs \
+  --device cuda \
+  --epochs 50 \
+  --batch_size 64 \
+  --num_workers 8 \
+  --lr 1e-4 \
+  --patience 5 \
+  --seed 42 \
+  # --spec_data_root "/content/data/spectrograms/noisy_train/" # Only needed if spec CSV paths need remapping
+  # --no_compile
+  # --no_amp
+
+
+Resume Run:
+python scripts/train_fusion.py \
+  "${WORKSPACE}/data/pairs/pairs_raw_train_preprocessed_local.csv" \
+  "${WORKSPACE}/data/pairs/pairs_spec_train_local.csv" \
+  --output_dir outputs \
+  --device cuda \
+  --epochs 50 \
+  --batch_size 64 \
+  --num_workers 8 \
+  --lr 1e-4 \
+  --patience 5 \
+  --seed 42 \
+  --resume \
+  # --spec_data_root "/content/data/spectrograms/noisy_train/"
+  # --no_compile
+  # --no_amp
+
+
+5. Evaluate Fusion Model
+(Assumes fusion_best.pt exists in outputs/checkpoints/)
+python scripts/evaluate.py \
+    outputs/checkpoints/fusion_best.pt \
+    --output_dir outputs \
+    --device cuda \
+    --batch_size 128 \
+    --num_workers 8 \
+    --test_splits \
+      clean "${WORKSPACE}/data/pairs/pairs_raw_clean_test_preprocessed_local.csv" "${WORKSPACE}/data/pairs/pairs_spec_clean_test_local.csv" \
+      noisy "${WORKSPACE}/data/pairs/pairs_raw_noisy_test_preprocessed_local.csv" "${WORKSPACE}/data/pairs/pairs_spec_noisy_test_local.csv" \
+      filtered "${WORKSPACE}/data/pairs/pairs_raw_filtered_test_preprocessed_local.csv" "${WORKSPACE}/data/pairs/pairs_spec_filtered_test_local.csv" \
+    # --spec_data_root_clean "/content/data/spectrograms/clean_test/" \ # Add if spec CSVs need remapping
+    # --spec_data_root_noisy "/content/data/spectrograms/noisy_test/" \
+    # --spec_data_root_filtered "/content/data/spectrograms/filtered_test/" \
+    # --no_amp # Disable AMP for evaluation if needed
+
+
+Remember to adjust paths and parameters like batch size and number of workers based
