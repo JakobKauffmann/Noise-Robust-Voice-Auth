@@ -1,0 +1,14 @@
+# Developed with Python 3.11 in Google Colab. Versions are not pinned.
+torch
+torchvision
+torchaudio
+librosa
+soundfile
+numpy
+pandas
+scipy
+scikit-learn
+matplotlib
+Pillow
+tqdm
+deepfilternet

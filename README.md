@@ -1,10 +1,63 @@
-# Noise-Robust Speaker Verification using Multi-Modal Fusion and Fine-tuning
+# Noise-Robust Multi-Modal Voice Authentication
 
-## Project Overview
+A speaker-verification prototype that fuses a raw-waveform SincNet embedding with a MobileNetV2 mel-spectrogram embedding, trained with MUSAN noise augmentation and evaluated on clean, noisy, and noise-filtered VoxCeleb1 test sets.
+
+**CS 286: Biometric Security in AI** · San José State University · Spring 2025 · Jakob Kauffmann
+
+<a href="docs/report.pdf"><img src="docs/report-preview.png" width="340" alt="First page of the project report"></a>&nbsp;&nbsp;<a href="docs/slides.pdf"><img src="docs/slides-preview.png" width="340" alt="Title slide of the project presentation"></a>
+
+**[Read the report (PDF)](docs/report.pdf)** · **[Slides (PDF)](docs/slides.pdf)**
+
+The report covers the system design, a literature review of noise-robust speaker verification, the evaluation, and next steps.
+
+## Results
+
+Fused model on VoxCeleb1 test pairs, as reported in the project report:
+
+| Test condition | EER | AUC | Decidability (d′) |
+|---|---|---|---|
+| Clean | 38.64% | 0.664 | 0.596 |
+| Noisy (MUSAN noise + telephone band-pass) | 34.07% | 0.720 | 0.819 |
+
+These error rates are well above published VoxCeleb1 systems, which report EERs below 5%. The report discusses the gap and lays out next steps, including angular-margin losses, attention-based fusion, and score calibration.
+
+## Method
+
+- **Temporal branch:** SincNet with learnable sinc filters on 3-second, 16 kHz waveforms (preprocessed to `.npy`).
+- **Spectral branch:** ImageNet-pretrained MobileNetV2 on 80-bin mel spectrograms (224 × 224).
+- **Fusion:** an MLP over the pair's concatenated embeddings outputs a verification logit (`BCEWithLogitsLoss`).
+- **Training:** each embedder is first trained on noisy augmented pairs; the full network is then fine-tuned end to end on mixed clean and noisy pairs at a lower learning rate.
+- **Evaluation:** EER, AUC, false match rate at fixed false non-match rates, and decidability on clean, noisy, and DeepFilterNet-filtered test pairs.
+
+## Repository layout
+
+```
+datasets/        PyTorch datasets for raw audio, preprocessed .npy, and spectrogram pairs
+models/          SincNet and MobileNetV2 embedding models
+preprocessing/   Colab notebooks: environment setup, MUSAN augmentation, DeepFilterNet filtering
+scripts/         Pair generation, data management, training, and evaluation command-line tools
+notebooks/       Exported Colab workflows used during the project
+docs/            Project report and slides
+```
+
+## Setup
+
+The project ran in Google Colab with data on Google Drive, so notebook and script defaults point to `/content/drive/...` paths. Point them at your own data locations before running.
+
+```bash
+pip install -r requirements.txt
+```
+
+Datasets are not redistributed. Download [VoxCeleb1](https://www.robots.ox.ac.uk/~vgg/data/voxceleb/vox1.html) and [MUSAN](https://www.openslr.org/17/) from their official sources.
+
+## Pipeline details
+
+
+### Project Overview
 
 This project implements and evaluates a speaker verification (SV) system designed for robustness against background noise and channel effects. It utilizes a multi-modal approach, fusing features extracted from raw audio waveforms (via SincNet) and mel-spectrograms (via MobileNetV2). Initial training of the embedding extractors is performed on augmented noisy data. Subsequently, the entire network (including embedders and a fusion classifier) is fine-tuned on a mixed dataset containing both clean and noisy samples to enhance robustness. The final system is evaluated across clean, noisy, and noise-filtered test conditions using the VoxCeleb1 dataset.
 
-## Pipeline Stages
+### Pipeline Stages
 
 The project follows these main stages:
 
@@ -17,16 +70,16 @@ The project follows these main stages:
 7.  **Fine-tuning:** Fine-tuning the complete fusion model (SincNet + MobileNetV2 + Fusion Classifier) with unfrozen embedders on a *mixed* dataset of clean and noisy training pairs.
 8.  **Evaluation:** Assessing the performance of the initial individual models and the final fine-tuned fusion model across different test conditions.
 
-## 1. Datasets Used
+### 1. Datasets Used
 
 * **VoxCeleb1:** Publicly available dataset for speaker recognition derived from YouTube videos. Used for speaker identity information.
     * `Dev` split: Used as the basis for clean and noisy training/validation sets.
     * `Test` split: Used as the basis for clean, noisy, and filtered evaluation sets.
 * **MUSAN:** Corpus of music, speech, and noise recordings. Used for data augmentation to simulate noisy environments.
 
-## 2. Data Preparation
+### 2. Data Preparation
 
-### 2.1. Augmentation (`pythonAugment.ipynb`)
+#### 2.1. Augmentation (`pythonAugment.ipynb`)
 
 * **Noise Addition:** Clean audio from VoxCeleb1 (`Dev` and `Test` splits) was augmented by adding random noise segments (music, ambient noise) from MUSAN at random SNRs (5-25 dB).
 * **Telephone Filter:** A 4th-order Butterworth bandpass filter (300-3400 Hz) was applied to all augmented audio to simulate telephone channel effects.
@@ -34,13 +87,13 @@ The project follows these main stages:
     * `Dev_Augmented/wav`: Noisy training set base.
     * `Test_Augmented/wav`: Noisy test set base.
 
-### 2.2. Noise Filtering (`DeepFilter.ipynb`)
+#### 2.2. Noise Filtering (`DeepFilter.ipynb`)
 
 * **Tool:** DeepFilterNet2 (DF3 model via `deepfilternet` library) was used for noise reduction.
 * **Input:** The augmented noisy test set (`Test_Augmented/wav`).
 * **Output:** `Test_Filtered/wav`: Enhanced (noise-filtered) test set base.
 
-### 2.3. Final Datasets for Training & Testing
+#### 2.3. Final Datasets for Training & Testing
 
 * **Initial Training Data:** Primarily uses data derived from `Dev_Augmented` (Noisy Train).
 * **Fine-tuning Data:** Uses a mix of data derived from the original clean `Dev` set and the `Dev_Augmented` set.
@@ -49,9 +102,9 @@ The project follows these main stages:
     2.  **Noisy:** Derived from `Test_Augmented` split.
     3.  **Filtered:** Derived from `Test_Filtered` split.
 
-## 3. Pair Generation & Feature Preparation
+### 3. Pair Generation & Feature Preparation
 
-### 3.1. Pair Generation (`make_verification_pairs.py`)
+#### 3.1. Pair Generation (`make_verification_pairs.py`)
 
 * **Process:** Generates CSV files containing genuine (same speaker) and imposter (different speaker) pairs for:
     * Clean Training (`pairs_raw_clean_train.csv`)
@@ -61,7 +114,7 @@ The project follows these main stages:
     * Filtered Test (`pairs_raw_filtered_test.csv`)
 * **Format:** `path/to/wav1,path/to/wav2,label` (1=genuine, 0=imposter). Paths are relative to the workspace root, pointing to the corresponding WAV files (clean, noisy, or filtered).
 
-### 3.2. Raw Audio Preprocessing (`data_manager_v3.py`)
+#### 3.2. Raw Audio Preprocessing (`data_manager_v3.py`)
 
 * **Action:** `--preprocess_raw` with appropriate `--dataset_keys`.
 * **Input:** Local raw audio WAV files (clean, noisy, filtered - copied from Drive).
@@ -70,7 +123,7 @@ The project follows these main stages:
     * Pads or truncates audio to a fixed length (e.g., 3 seconds / 48000 samples via `--target_len`).
 * **Output:** Saves processed audio as `.npy` files locally (`/content/data/raw_audio_preprocessed/{condition}/...`) AND to Google Drive (`$WORKSPACE/data/raw_audio_preprocessed/{condition}/...`).
 
-### 3.3. Spectrogram Generation (`make_spectrogram_pairs.py`)
+#### 3.3. Spectrogram Generation (`make_spectrogram_pairs.py`)
 
 * **Action:** Run via notebook cells (e.g., `finetune_full_prep_notebook.ipynb`).
 * **Input:** Original raw pair CSVs (`pairs_raw_*.csv`) and corresponding local raw WAV files.
@@ -82,7 +135,7 @@ The project follows these main stages:
     * Saves corresponding pair CSVs (`pairs_spec_*_local.csv`) to Drive, containing paths to the *local* PNG images.
     * Generated images are also backed up to Drive (`$WORKSPACE/data/spectrograms_generated_png/{condition}/...`).
 
-### 3.4. NPY Pair CSV Generation (`data_manager_v3.py`)
+#### 3.4. NPY Pair CSV Generation (`data_manager_v3.py`)
 
 * **Action:** `--gen_csv_local`, `--gen_csv_drive` with appropriate `--dataset_keys`.
 * **Input:** Original raw pair CSVs (`pairs_raw_*.csv`).
@@ -91,7 +144,7 @@ The project follows these main stages:
     * `pairs_raw_*_preprocessed_local.csv`: Contains paths to *local* `.npy` files (saved to Drive).
     * `pairs_raw_*_preprocessed_drive.csv`: Contains paths to *Drive* `.npy` files (saved to Drive).
 
-## 4. Data Management (`data_manager_v3.py`)
+### 4. Data Management (`data_manager_v3.py`)
 
 This script handles copying data between Google Drive and the local Colab runtime using specific flags and dataset keys (`train_clean`, `train_noisy`, `test_clean`, etc.). Key actions relevant to the workflow:
 
@@ -101,27 +154,27 @@ This script handles copying data between Google Drive and the local Colab runtim
 * `--load_npy`: Copies NPY files from Drive to local.
 * `--gen_csv_local`/`--gen_csv_drive`: Generates NPY pair CSVs.
 
-## 5. Model Architectures
+### 5. Model Architectures
 
-### 5.1. SincNet (`models/sincnet.py`)
+#### 5.1. SincNet (`models/sincnet.py`)
 
 * **Input:** Raw audio waveform (`.npy` format, preprocessed to fixed length).
 * **Architecture:** Uses learnable sinc-based convolutional filters in the first layer, followed by standard Conv1D, MaxPool, LayerNorm/BatchNorm layers, and fully connected layers.
 * **Output:** Fixed-size speaker embedding (e.g., 256 dimensions).
 
-### 5.2. MobileNetV2 (`models/mobilenet_embedding.py`)
+#### 5.2. MobileNetV2 (`models/mobilenet_embedding.py`)
 
 * **Input:** Mel-spectrogram image (PNG format, e.g., 224x224).
 * **Architecture:** Uses a pre-trained MobileNetV2 (from `torchvision`) as a feature extractor. Features can be frozen or fine-tuned. An Adaptive Average Pooling layer and a final linear layer project features to the desired embedding size.
 * **Output:** Fixed-size speaker embedding (e.g., 256 dimensions).
 
-### 5.3. Fusion Classifier (`scripts/train_fusion.py`)
+#### 5.3. Fusion Classifier (`scripts/train_fusion.py`)
 
 * **Input:** Concatenated embeddings from SincNet and MobileNetV2 for a pair of utterances `[e1_raw, e1_spec, e2_raw, e2_spec]`.
 * **Architecture:** Multi-Layer Perceptron (MLP) with BatchNorm and ReLU/LeakyReLU activations, outputting a single logit (raw score before sigmoid).
 * **Output:** Verification score (logit).
 
-## 6. Model Training & Fine-tuning
+### 6. Model Training & Fine-tuning
 
 Training follows a multi-stage process, orchestrated by the main workflow notebook:
 
@@ -150,7 +203,7 @@ Training follows a multi-stage process, orchestrated by the main workflow notebo
 * **Local Data:** Training data copied locally.
 * **DataLoader Tuning:** `num_workers`, `batch_size`, `persistent_workers=True`.
 
-## 7. Evaluation (`scripts/evaluate.py` / Notebook Cell)
+### 7. Evaluation (`scripts/evaluate.py` / Notebook Cell)
 
 * **Models Evaluated:**
     1.  Original SincNet standalone (from initial noisy training).
@@ -166,7 +219,7 @@ Training follows a multi-stage process, orchestrated by the main workflow notebo
     * False Match Rate (FMR) at specific False Non-Match Rate (FNMR) targets (e.g., FNMR=1%, FNMR=0.1%).
 * **Output:** Results are saved to a JSON file (e.g., `outputs_finetuned/metrics/evaluation_results_finetuned.json`).
 
-## 8. Dependencies
+### 8. Dependencies
 
 * Python 3.x
 * PyTorch (>= 1.7 recommended for `torch.amp`, >= 2.0 for `torch.compile`)
